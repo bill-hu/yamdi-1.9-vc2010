@@ -40,16 +40,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <unistd.h>
-//#include <inttypes.h>
-#define PRIu64 "%I64u"
 #include <errno.h>
 
-#ifdef WIN32
+#ifdef _MSC_VER
 #include <Windows.h>
 #include <stdint.h>
+#include "getopt.h"
 #define fseeko fseek
 #define ftello ftell
+#define PRIu64 "%I64u"
+#else
+#include <unistd.h>
+#include <inttypes.h>
 #endif
 
 #ifdef __MINGW32__
@@ -309,9 +311,11 @@ int main(int argc, char **argv) {
 	creator = NULL;
 
 	initFLV(&flv);
+#if 0
 	infile = argv[1];
 	outfile = argv[2];
-#if 0
+#endif
+#if 1
 	opterr = 0;
 	while((c = getopt(argc, argv, ":i:o:x:t:c:a:lskMXwh")) != -1) {
 		switch(c) {
@@ -1210,19 +1214,19 @@ onmetadatapass:
 		writeBufferFLVScriptDataValueDouble(&b, "lastkeyframetimestamp", (double)flv->keyframes.lastkeyframetimestamp / 1000.0); length++;
 		writeBufferFLVScriptDataValueDouble(&b, "lastkeyframelocation", (double)flv->keyframes.lastkeyframelocation); length++;
 
-		writeBufferFLVScriptDataVariableArray(&b, "keyframes"); length++;
+		//writeBufferFLVScriptDataVariableArray(&b, "keyframes"); length++;
 
-			writeBufferFLVScriptDataValueArray(&b, "filepositions", flv->keyframes.nkeyframes);
+		//	writeBufferFLVScriptDataValueArray(&b, "filepositions", flv->keyframes.nkeyframes);
 
-			for(i = 0; i < flv->keyframes.nkeyframes; i++)
-				writeBufferFLVScriptDataValueDouble(&b, NULL, (double)flv->keyframes.keyframelocations[i]);
+		//	for(i = 0; i < flv->keyframes.nkeyframes; i++)
+		//		writeBufferFLVScriptDataValueDouble(&b, NULL, (double)flv->keyframes.keyframelocations[i]);
 
-			writeBufferFLVScriptDataValueArray(&b, "times", flv->keyframes.nkeyframes);
+		//	writeBufferFLVScriptDataValueArray(&b, "times", flv->keyframes.nkeyframes);
 
-			for(i = 0; i < flv->keyframes.nkeyframes; i++)
-				writeBufferFLVScriptDataValueDouble(&b, NULL, (double)flv->keyframes.keyframetimestamps[i] / 1000.0);
+		//	for(i = 0; i < flv->keyframes.nkeyframes; i++)
+		//		writeBufferFLVScriptDataValueDouble(&b, NULL, (double)flv->keyframes.keyframetimestamps[i] / 1000.0);
 
-		writeBufferFLVScriptDataVariableArrayEnd(&b);
+		//writeBufferFLVScriptDataVariableArrayEnd(&b);
 	}
 
 	writeBufferFLVScriptDataVariableArrayEnd(&b);
