@@ -1214,19 +1214,19 @@ onmetadatapass:
 		writeBufferFLVScriptDataValueDouble(&b, "lastkeyframetimestamp", (double)flv->keyframes.lastkeyframetimestamp / 1000.0); length++;
 		writeBufferFLVScriptDataValueDouble(&b, "lastkeyframelocation", (double)flv->keyframes.lastkeyframelocation); length++;
 
-		//writeBufferFLVScriptDataVariableArray(&b, "keyframes"); length++;
+		writeBufferFLVScriptDataVariableArray(&b, "keyframes"); length++;
 
-		//	writeBufferFLVScriptDataValueArray(&b, "filepositions", flv->keyframes.nkeyframes);
+			writeBufferFLVScriptDataValueArray(&b, "filepositions", flv->keyframes.nkeyframes);
 
-		//	for(i = 0; i < flv->keyframes.nkeyframes; i++)
-		//		writeBufferFLVScriptDataValueDouble(&b, NULL, (double)flv->keyframes.keyframelocations[i]);
+			for(i = 0; i < flv->keyframes.nkeyframes; i++)
+				writeBufferFLVScriptDataValueDouble(&b, NULL, (double)flv->keyframes.keyframelocations[i]);
 
-		//	writeBufferFLVScriptDataValueArray(&b, "times", flv->keyframes.nkeyframes);
+			writeBufferFLVScriptDataValueArray(&b, "times", flv->keyframes.nkeyframes);
 
-		//	for(i = 0; i < flv->keyframes.nkeyframes; i++)
-		//		writeBufferFLVScriptDataValueDouble(&b, NULL, (double)flv->keyframes.keyframetimestamps[i] / 1000.0);
+			for(i = 0; i < flv->keyframes.nkeyframes; i++)
+				writeBufferFLVScriptDataValueDouble(&b, NULL, (double)flv->keyframes.keyframetimestamps[i] / 1000.0);
 
-		//writeBufferFLVScriptDataVariableArrayEnd(&b);
+		writeBufferFLVScriptDataVariableArrayEnd(&b);
 	}
 
 	writeBufferFLVScriptDataVariableArrayEnd(&b);
