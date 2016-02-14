@@ -201,6 +201,7 @@ typedef struct {
 		short xmlomitkeyframes;		// -X
 
 		short overwriteinput;		// -w
+		short verify;  //-t
 	} options;
 
 	buffer_t onmetadata;
@@ -317,7 +318,7 @@ int main(int argc, char **argv) {
 #endif
 #if 1
 	opterr = 0;
-	while((c = getopt(argc, argv, ":i:o:x:t:c:a:lskMXwh")) != -1) {
+	while((c = getopt(argc, argv, ":i:o:x:t:c:a:lskMXwhv")) != -1) {
 		switch(c) {
 			case 'i':
 				infile = optarg;
@@ -367,6 +368,9 @@ int main(int argc, char **argv) {
 				printUsage();
 				exit(YAMDI_ERROR);
 				break;
+			case 'v':
+				flv.options.verify = 1;
+				break;
 			case ':':
 				fprintf(stderr, "The option -%c expects a parameter. -h for help.\n", optopt);
 				exit(YAMDI_ERROR);
@@ -387,7 +391,7 @@ int main(int argc, char **argv) {
 		exit(YAMDI_ERROR);
 	}
 
-	if(outfile == NULL && xmloutfile == NULL) {
+	if(outfile == NULL && xmloutfile == NULL && !flv.options.verify) {
 		fprintf(stderr, "Please use -o or -x to provide at least one output file. -h for help.\n");
 		exit(YAMDI_ERROR);
 	}
@@ -647,6 +651,18 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 	offset = FLV_SIZE_HEADER + FLV_SIZE_PREVIOUSTAGSIZE;
 	nflvtags = 0;
 	while(readFLVTag(&flvtag, offset, fp) == YAMDI_OK) {
+		if(flv->options.verify)
+		{
+			if(flvtag.tagtype == FLV_TAG_VIDEO)
+			{
+				printf("\n -v: %06d ,%d",flvtag.timestamp,flvtag.datasize);
+			}
+			else if(flvtag.tagtype == FLV_TAG_AUDIO)
+			{
+				printf("\n -a: %06d ,%d",flvtag.timestamp,flvtag.datasize);
+			}
+		}
+
 		offset += (flvtag.tagsize + FLV_SIZE_PREVIOUSTAGSIZE);
 
 		nflvtags++;
@@ -654,6 +670,8 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 
 	flv->index.nflvtags = nflvtags;
 
+	if(flv->options.verify)
+		return -1;
 #ifdef DEBUG
 	fprintf(stderr, "[FLV] nflvtags = %d\n", flv->index.nflvtags);
 #endif
@@ -669,9 +687,40 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 	// Store the tag metadata in the index
 	offset = FLV_SIZE_HEADER + FLV_SIZE_PREVIOUSTAGSIZE;
 	nflvtags = 0;
+	int  lastVideo = 0;
+	int  lastAudio = 0;
+	int vtime_offset = 0;
+	int atime_offset = 0;
+	bool blastVideo = 0;
+
 	while(readFLVTag(&flvtag, offset, fp) == YAMDI_OK) {
 		flv->index.flvtag[nflvtags].offset = flvtag.offset;
 		flv->index.flvtag[nflvtags].tagtype = flvtag.tagtype;
+#if 0
+		if(flvtag.tagtype == FLV_TAG_VIDEO)
+		{
+			if(flvtag.timestamp - lastVideo > 1000)
+			{
+				vtime_offset = flvtag.timestamp - lastVideo -100;
+			}
+			lastVideo = flvtag.timestamp;
+			flvtag.timestamp -= vtime_offset;
+			blastVideo = true;
+		}
+		else if(flvtag.tagtype == FLV_TAG_AUDIO)
+		{
+			if(flvtag.timestamp - lastAudio > 1000)
+			{
+				//if(lastVideo - lastAudio > 1000)
+				//	atime_offset =  flvtag.timestamp - lastVideo -100;
+				//else
+				     atime_offset = flvtag.timestamp - lastAudio -40;
+			}
+			lastAudio = flvtag.timestamp;
+			flvtag.timestamp -= atime_offset;
+			blastVideo = false;
+		}
+#endif
 		flv->index.flvtag[nflvtags].datasize = flvtag.datasize;
 		flv->index.flvtag[nflvtags].timestamp = flvtag.timestamp;
 		flv->index.flvtag[nflvtags].tagsize = flvtag.tagsize;
