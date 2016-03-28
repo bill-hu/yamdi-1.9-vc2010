@@ -1,13 +1,13 @@
 # Makefile for yamdi
 
-CC=gcc
+CC=g++
 CFLAGS=-O2 -Wall
 
-yamdi: yamdi.c Makefile
-	$(CC) $(CFLAGS) yamdi.c -o yamdi
+yamdi: yamdi.cpp Makefile
+	$(CC) $(CFLAGS) yamdi.cpp -o centos/yamdi
 
 clean: yamdi
 	rm -f yamdi
 
 install: yamdi
-	install -m 0755 -o root yamdi /usr/local/bin
+	install -m 0755 -o root centos/yamdi /usr/local/bin

@@ -52,6 +52,8 @@
 #else
 #include <unistd.h>
 #include <inttypes.h>
+#define min(x,y) ((x)>(y)?(y):(x))
+#define  PRIu64 "PRIu64"
 #endif
 
 #ifdef __MINGW32__
@@ -768,7 +770,7 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 				int diff = flvtag.timestamp - lastaudioTimestamp;
 				if(diff > 1000 ||diff < 0)
 				{
-					printf("\nError");
+					printf("Error\n");
 					if(flv->options.fix )
 					{
 						tryFixTheFile(fp,offset,lastaudioTimestamp);
