@@ -689,8 +689,7 @@ char * findmem( char * buf, int buf_len, char * target, int target_len )
 	return NULL;
 }
 
-
-int tryFixTheFile(FILE * fp, off_t offset )
+int tryFixTheFile(FILE * fp, off_t offset, int lastTimeStamp )
 {
 	if(!outfile)
 	{
@@ -714,8 +713,27 @@ int tryFixTheFile(FILE * fp, off_t offset )
 	char * p = findmem(buf,left,target,4);
 	if(p)
 	{
+		FLVTag_t flvtag;
+		p+= 4;
+		offset += (p - buf);
+		off_t begin_offset = offset;
+		fseek(fp, begin_offset, SEEK_SET);
+		while(readFLVTag(&flvtag, offset, fp) == YAMDI_OK) {
+			if(flvtag.timestamp > lastTimeStamp && flvtag.tagtype == FLV_TAG_AUDIO)
+			{
+				break;
+			}
+			offset += (flvtag.tagsize + FLV_SIZE_PREVIOUSTAGSIZE);
+		}
+
+		if(offset < _filesize)
+		{
+			p += (offset - begin_offset);
+		}
+
 		fwrite(p,1,left - (p - buf),fp_outfile);
 	}
+
 
 	fclose(fp_outfile);
 	fp_outfile = NULL;
@@ -753,7 +771,7 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 					printf("\nError");
 					if(flv->options.fix )
 					{
-						tryFixTheFile(fp,offset);
+						tryFixTheFile(fp,offset,lastaudioTimestamp);
 						return -1;
 					}
 				}
