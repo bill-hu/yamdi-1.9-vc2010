@@ -202,6 +202,8 @@ typedef struct {
 
 		short overwriteinput;		// -w
 		short verify;  //-t
+		short verify_dummy;   //-d
+		short fix;//-f
 	} options;
 
 	buffer_t onmetadata;
@@ -289,10 +291,11 @@ int isBigEndian(void);
 
 void printUsage(void);
 
+char *outfile = NULL;
+FILE *fp_infile = NULL, *fp_outfile = NULL, *fp_xmloutfile = NULL;
 int main(int argc, char **argv) {
-	FILE *fp_infile = NULL, *fp_outfile = NULL, *fp_xmloutfile = NULL;
 	int c, unlink_infile = 0;
-	char *infile, *outfile, *xmloutfile, *tempfile, *creator;
+	char *infile, *xmloutfile, *tempfile, *creator;
 	FLV_t flv;
 
 #ifdef DEBUG
@@ -318,7 +321,7 @@ int main(int argc, char **argv) {
 #endif
 #if 1
 	opterr = 0;
-	while((c = getopt(argc, argv, ":i:o:x:t:c:a:lskMXwhv")) != -1) {
+	while((c = getopt(argc, argv, ":i:o:x:t:c:a:lskMXwhvdf")) != -1) {
 		switch(c) {
 			case 'i':
 				infile = optarg;
@@ -370,6 +373,12 @@ int main(int argc, char **argv) {
 				break;
 			case 'v':
 				flv.options.verify = 1;
+				break;
+			case 'd':
+				flv.options.verify_dummy = 1;
+				break;
+			case 'f':
+				flv.options.fix = 1;
 				break;
 			case ':':
 				fprintf(stderr, "The option -%c expects a parameter. -h for help.\n", optopt);
@@ -594,15 +603,16 @@ int main(int argc, char **argv) {
 	return YAMDI_OK;
 }
 
+	off_t _filesize;
 int validateFLV(FILE *fp) {
 	unsigned char buffer[FLV_SIZE_HEADER + FLV_SIZE_PREVIOUSTAGSIZE];
-	off_t filesize;
+
 
 	fseeko(fp, 0, SEEK_END);
-	filesize = ftello(fp);
+	_filesize = ftello(fp);
 
 	// Check for minimal FLV file length
-	if(filesize < (FLV_SIZE_HEADER + FLV_SIZE_PREVIOUSTAGSIZE))
+	if(_filesize < (FLV_SIZE_HEADER + FLV_SIZE_PREVIOUSTAGSIZE))
 		return YAMDI_FILE_TOO_SMALL;
 
 	rewind(fp);
@@ -638,6 +648,80 @@ int initFLV(FLV_t *flv) {
 	return YAMDI_OK;
 }
 
+int copyFileContent( FILE * fp, off_t start, off_t end, FILE * fpo )
+{
+	const int  COPY_BUF_SIZE =  1024*1024;
+	char * buf = new char[COPY_BUF_SIZE];
+	fseek(fp,start,SEEK_SET);
+	off_t left = end - start;
+
+	while(left > 0)
+	{
+		off_t read = min(left,COPY_BUF_SIZE);
+		fread(buf, 1, read, fp);
+		fwrite(buf,1, read, fpo);
+		left -=read;
+	}
+
+	delete buf;
+	return 0;
+}
+
+
+char * findmem( char * buf, int buf_len, char * target, int target_len )
+{
+	if(buf_len < target_len)
+		return NULL;
+
+	for(char * ps = buf; ps<buf + buf_len - target_len; ps++)
+	{
+		char * pt = target;
+		char * p = ps;
+		int i=0;
+		for(; i<target_len; i++, p++, pt++)
+		{
+			if(*p != *pt)
+				break;
+		}
+		if(i==target_len)
+			return ps;
+	}
+	return NULL;
+}
+
+
+int tryFixTheFile(FILE * fp, off_t offset )
+{
+	if(!outfile)
+	{
+		printf("\n please use -o to specify the output file name when try to fix");
+		return -1;
+	}
+
+	if(!fp_outfile)
+	{
+		printf("\n can't open file '%s' when try to fix");
+		return -1;
+	}
+
+	copyFileContent(fp,0,offset,fp_outfile);
+
+	int left = _filesize - offset;
+	char * buf = new char[left];
+	fread(buf,1,left,fp);
+
+	char  target[]={0,0,0,0x40,8};
+	char * p = findmem(buf,left,target,4);
+	if(p)
+	{
+		fwrite(p,1,left - (p - buf),fp_outfile);
+	}
+
+	fclose(fp_outfile);
+	fp_outfile = NULL;
+}
+
+
 int indexFLV(FLV_t *flv, FILE *fp) {
 	off_t offset;
 	size_t nflvtags;
@@ -650,16 +734,30 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 	// Count how many tags are there in this FLV
 	offset = FLV_SIZE_HEADER + FLV_SIZE_PREVIOUSTAGSIZE;
 	nflvtags = 0;
+	int lastaudioTimestamp =0;
 	while(readFLVTag(&flvtag, offset, fp) == YAMDI_OK) {
 		if(flv->options.verify)
 		{
 			if(flvtag.tagtype == FLV_TAG_VIDEO)
 			{
-				printf("\n -v: %06d ,%d",flvtag.timestamp,flvtag.datasize);
+				if(!flv->options.verify_dummy)
+					printf("\n -v: %06d ,tagsize:%06d,  offset:%06x",flvtag.timestamp,flvtag.datasize,offset);
 			}
 			else if(flvtag.tagtype == FLV_TAG_AUDIO)
 			{
-				printf("\n -a: %06d ,%d",flvtag.timestamp,flvtag.datasize);
+				if(!flv->options.verify_dummy)
+					printf("\n -a: %06d ,tagsize:%06d   offset:%06x",flvtag.timestamp,flvtag.datasize,offset);
+				int diff = flvtag.timestamp - lastaudioTimestamp;
+				if(diff > 1000 ||diff < 0)
+				{
+					printf("\nError");
+					if(flv->options.fix )
+					{
+						tryFixTheFile(fp,offset);
+						return -1;
+					}
+				}
+				lastaudioTimestamp = flvtag.timestamp;
 			}
 		}
 
@@ -671,7 +769,9 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 	flv->index.nflvtags = nflvtags;
 
 	if(flv->options.verify)
+	{
 		return -1;
+	}
 #ifdef DEBUG
 	fprintf(stderr, "[FLV] nflvtags = %d\n", flv->index.nflvtags);
 #endif
