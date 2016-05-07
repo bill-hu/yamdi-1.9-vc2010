@@ -755,7 +755,8 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 	offset = FLV_SIZE_HEADER + FLV_SIZE_PREVIOUSTAGSIZE;
 	nflvtags = 0;
 	int lastaudioTimestamp =0;
-	while(readFLVTag(&flvtag, offset, fp) == YAMDI_OK) {
+	int ret;
+	while((ret = readFLVTag(&flvtag, offset, fp)) == YAMDI_OK) {
 		if(flv->options.verify)
 		{
 			if(flvtag.tagtype == FLV_TAG_VIDEO)
@@ -781,9 +782,19 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 			}
 		}
 
+
 		offset += (flvtag.tagsize + FLV_SIZE_PREVIOUSTAGSIZE);
 
 		nflvtags++;
+	}
+	if(ret && ret!= YAMDI_READ_ERROR)
+	{
+		printf("\nError:%d",ret);
+		if(flv->options.fix )
+		{
+			tryFixTheFile(fp,offset,lastaudioTimestamp);
+			return -1;
+		}
 	}
 
 	flv->index.nflvtags = nflvtags;
@@ -2008,17 +2019,16 @@ int readFLVTag(FLVTag_t *flvtag, off_t offset, FILE *fp) {
 	// Skip the data
 	readBytes(NULL, flvtag->datasize, fp);
 
-	// Read the previous tag size
-	readBytes(buffer, FLV_SIZE_PREVIOUSTAGSIZE, fp);
-
-	// Check the previous tag size
-	// This is too picky. We don't need it.
-/*
-	if(FLV_UI32(buffer) != (FLV_SIZE_TAGHEADER + flvtag->datasize))
-		return YAMDI_INVALID_PREVIOUSTAGSIZE;
-*/
 
 	flvtag->tagsize = FLV_SIZE_TAGHEADER + flvtag->datasize;
+
+	// Read the previous tag size
+	if(!readBytes(buffer, FLV_SIZE_PREVIOUSTAGSIZE, fp))
+	{
+		// Check the previous tag size
+		if(FLV_UI32(buffer) != flvtag->tagsize)
+			return YAMDI_INVALID_PREVIOUSTAGSIZE;
+	}
 
 	return YAMDI_OK;
 }
