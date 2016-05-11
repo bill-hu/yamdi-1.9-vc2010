@@ -726,7 +726,7 @@ int tryFixTheFile(FILE * fp, off_t offset, int lastTimeStamp )
 
 	for(int i = 0; i<left;)
 	{
-		if(*p == 8 || *p == 9 )
+		if(*p == FLV_TAG_AUDIO || *p == FLV_TAG_VIDEO || *p == FLV_TAG_SCRIPTDATA)
 		{
 			FLVTag_t flvtag;
 			off_t begin_offset = offset + (p - buf);
