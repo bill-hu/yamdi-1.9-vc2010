@@ -753,7 +753,7 @@ int tryFixTheFile(FILE * fp, off_t offset, int lastTimeStamp )
 	}
 
 	fclose(fp_outfile);
-    printf("\nfixed");
+    printf("\nfixed\n");
 	fp_outfile = NULL;
 }
 
