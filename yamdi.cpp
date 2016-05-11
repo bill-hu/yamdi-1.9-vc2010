@@ -98,6 +98,8 @@
 #define FLV_UI8(x) (unsigned int)(*(x))
 #define FLV_TIMESTAMP(x) (int)(((*(x + 3)) << 24) + ((*(x)) << 16) + ((*(x + 1)) << 8) + (*(x + 2)))
 
+#define writeUI32(x,buf) { * buf =  x >> 24; *(buf +1) = x>> 16; *(buf +2) = x >> 8; *(buf +3) = x;}
+
 typedef struct {
 	unsigned char *data;
 	size_t size;
@@ -691,6 +693,8 @@ char * findmem( char * buf, int buf_len, char * target, int target_len )
 	return NULL;
 }
 
+int readFLVTagInMem(FLVTag_t *flvtag, unsigned char * pBuf,int size_buf);
+
 int tryFixTheFile(FILE * fp, off_t offset, int lastTimeStamp )
 {
 	if(!outfile)
@@ -708,32 +712,44 @@ int tryFixTheFile(FILE * fp, off_t offset, int lastTimeStamp )
 	copyFileContent(fp,0,offset,fp_outfile);
 
 	int left = _filesize - offset;
-	char * buf = new char[left];
-	fread(buf,1,left,fp);
-
-	char  target[]={0,0,0,0x40,8};
-	char * p = findmem(buf,left,target,4);
-	if(p)
+	unsigned char * buf = new unsigned char[left];
+	if(fread(buf,1,left,fp)!=left)
 	{
-		FLVTag_t flvtag;
-		p+= 4;
-		offset += (p - buf);
-		off_t begin_offset = offset;
-		fseek(fp, begin_offset, SEEK_SET);
-		while(readFLVTag(&flvtag, offset, fp) == YAMDI_OK) {
-			if(flvtag.timestamp > lastTimeStamp && flvtag.tagtype == FLV_TAG_AUDIO)
-			{
-				break;
-			}
-			offset += (flvtag.tagsize + FLV_SIZE_PREVIOUSTAGSIZE);
-		}
+		printf("Error Reading input file");
+		fclose(fp_outfile);
+		return -1;
+	}
 
-		if(offset < _filesize)
+	unsigned char * p = buf;
+	unsigned int previous_tag_size = 0;
+	unsigned char buf_uint32[4];
+
+	for(int i = 0; i<left;)
+	{
+		if(*p == 8 || *p == 9 )
 		{
-			p += (offset - begin_offset);
-		}
+			FLVTag_t flvtag;
+			off_t begin_offset = offset + (p - buf);
 
-		fwrite(p,1,left - (p - buf),fp_outfile);
+			if(readFLVTagInMem(&flvtag, p , left -i) == YAMDI_OK)
+			{
+				if(flvtag.timestamp > lastTimeStamp)
+				{
+					if(previous_tag_size)
+					{
+						writeUI32(previous_tag_size , buf_uint32);
+						fwrite(buf_uint32,1,4,fp_outfile);
+					}
+					fwrite(p,1,flvtag.tagsize,fp_outfile);
+					previous_tag_size = flvtag.tagsize;
+					p+= (flvtag.tagsize + FLV_SIZE_PREVIOUSTAGSIZE);
+					i+= (flvtag.tagsize + FLV_SIZE_PREVIOUSTAGSIZE);
+					continue;
+				}
+			}
+		}
+		p++;
+		i++;
 	}
 
 
@@ -2024,6 +2040,63 @@ int readFLVTag(FLVTag_t *flvtag, off_t offset, FILE *fp) {
 
 	// Read the previous tag size
 	if(!readBytes(buffer, FLV_SIZE_PREVIOUSTAGSIZE, fp))
+	{
+		// Check the previous tag size
+		if(FLV_UI32(buffer) != flvtag->tagsize)
+			return YAMDI_INVALID_PREVIOUSTAGSIZE;
+	}
+
+	return YAMDI_OK;
+}
+
+int readFLVTagInMem(FLVTag_t *flvtag, unsigned char * pBuf,int size_buf) {
+	int rv;
+	unsigned char * buffer;
+
+	memset(flvtag, 0, sizeof(FLVTag_t));
+
+	if(size_buf < FLV_SIZE_TAGHEADER)
+		return YAMDI_READ_ERROR;
+
+	flvtag->offset = 0;
+
+	buffer = pBuf;
+	pBuf += FLV_SIZE_TAGHEADER;
+	size_buf -= FLV_SIZE_TAGHEADER;
+
+	flvtag->tagtype = FLV_UI8(buffer);
+
+	// Assuming only known tags. Otherwise we only process the
+	// input file up to this point. It is not possible to detect
+	// where the next valid tag could be.
+	switch(flvtag->tagtype) {
+	case FLV_TAG_VIDEO:
+	case FLV_TAG_AUDIO:
+	case FLV_TAG_SCRIPTDATA:
+		break;
+	default:
+		return YAMDI_INVALID_TAGTYPE;
+	}
+
+	flvtag->datasize = (size_t)FLV_UI24(&buffer[1]);
+	flvtag->timestamp = FLV_TIMESTAMP(&buffer[4]);
+
+	// Skip the data
+	if(size_buf <  flvtag->datasize)
+		return YAMDI_READ_ERROR;
+	pBuf += flvtag->datasize;
+	size_buf -= flvtag->datasize;
+
+	flvtag->tagsize = FLV_SIZE_TAGHEADER + flvtag->datasize;
+
+	if(!size_buf)
+		return YAMDI_OK;
+
+	// Read the previous tag size
+	if(size_buf < FLV_SIZE_PREVIOUSTAGSIZE)
+		return YAMDI_READ_ERROR;
+
+	buffer = pBuf;
 	{
 		// Check the previous tag size
 		if(FLV_UI32(buffer) != flvtag->tagsize)
