@@ -787,7 +787,7 @@ int indexFLV(FLV_t *flv, FILE *fp) {
 				int diff = flvtag.timestamp - lastaudioTimestamp;
 				if(diff > 1000 ||diff < 0)
 				{
-					printf("Error\n");
+					printf("\nError");
 					if(flv->options.fix )
 					{
 						tryFixTheFile(fp,offset,lastaudioTimestamp);
